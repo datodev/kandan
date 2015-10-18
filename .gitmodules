@@ -1,0 +1,12 @@
+[submodule "vendors/dato"]
+	path = vendors/dato
+	url = git@github.com:datodev/dato.git
+[submodule "vendor/dato"]
+	path = vendor/dato
+	url = git@github.com:datodev/dato.git
+[submodule "vendor/garden"]
+	path = vendor/garden
+	url = git@github.com:sgrove/garden.git
+[submodule "vendor/datascript"]
+	path = vendor/datascript
+	url = git@github.com:sgrove/datascript.git
