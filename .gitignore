@@ -12,3 +12,4 @@ pom.xml.asc
 resources/public/js/bin*
 figwheel_server.log
 datomic*.zip
+/vendor/datomic
