@@ -4,6 +4,7 @@
               [dato.lib.core :as dato]
               [dato.lib.db :as db]
               [kandan.client.components.root :as com-root]
+              [kandan.client.controllers.controls :as controls]
               [kandan.client.routes :as routes]
               [kandan.client.utils :as utils]
               [kandan.client.config :as config]
@@ -64,11 +65,17 @@
          (go
            ;; Wait until we have the schema and session-id
            (let [[bootstrap-success? session-id] (<! dato-ch)
-                 {:keys [r-qes-by]}              @(:ss dato)]
+                 {:keys [r-pull]}              @(:ss dato)]
              (let [router (routes/make-router dato)]
-               (r-qes-by {:name :find-tasks
-                          :a    :dato/type
-                          :v    :kandan.types/task})
+               #_(r-qes-by {:name :find-channels
+                            :a    :dato/type
+                            :v    :kandan.type/org})
+               
+               (r-pull {:name   :initial-pull
+                        :pull   '[*
+                                  {:org/users [*]}
+                                  {:org/channels [* {:channel/msgs [*]}]}]
+                        :lookup [:org/name "Bushido"]})
                (dato/start-loop! dato {:root container
                                        :router router})))))
        app-root))))

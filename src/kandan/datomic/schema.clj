@@ -34,12 +34,12 @@
   (vec
    (concat
     ;; Kandan Types
-    [(enum :kandan.types/org)
-     (enum :kandan.types/user)
-     (enum :kandan.types/channel)
-     (enum :kandan.types/msg)
-     (enum :kandan.types/file)
-     (enum :kandan.types/notification-setting)]
+    [(enum :kandan.type/org)
+     (enum :kandan.type/user)
+     (enum :kandan.type/channel)
+     (enum :kandan.type/msg)
+     (enum :kandan.type/file)
+     (enum :kandan.type/notification-setting)]
 
     ;; Orgs
     [(attribute :org/name       :db.type/string :db/unique :db.unique/value)
@@ -57,6 +57,7 @@
      (attribute :user/nick        :db.type/string)
      (attribute :user/given-name  :db.type/string)
      (attribute :user/family-name :db.type/string)
+     (attribute :user/password    :db.type/string)
      (attribute :user/avatar      :db.type/uri)
      (attribute :user/notification-settings :db.type/ref
                 :db/cardinality :db.cardinality/many
@@ -96,6 +97,16 @@
      (attribute :msg/pinned?    :db.type/boolean)
      (attribute :msg/file       :db.type/ref
                 :db/isComponent true)]
+
+    ;; File types
+    [(enum :file.type/pdf)
+     (enum :file.type/image)
+     (enum :file.type/link)
+     (enum :file.type/text)
+     (enum :file.type/office-word)
+     (enum :file.type/office-excel)
+     (enum :file.type/office-powerpoint)
+     (enum :file.type/unknown)]
 
     ;; File
     [(attribute :file/name               :db.type/string)

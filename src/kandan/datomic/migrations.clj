@@ -34,15 +34,15 @@
 (defn create-dummy-users
   "Creates a few dummy users for testing"
   [conn]
-  @(d/transact conn [{:db/id (d/tempid :db.part/user)
-                      :user/id (d/squuid)
-                      :user/email "dwwoelfel@gmail.com"
-                      :user/given-name "Daniel"
+  @(d/transact conn [{:db/id            (d/tempid :db.part/user)
+                      :dato/guid        (d/squuid)
+                      :user/email       "dwwoelfel@gmail.com"
+                      :user/given-name  "Daniel"
                       :user/family-name "Woelfel"}
-                     {:db/id (d/tempid :db.part/user)
-                      :user/id (d/squuid)
-                      :user/email "sean@example.com"
-                      :user/given-name "Sean"
+                     {:db/id            (d/tempid :db.part/user)
+                      :dato/guid        (d/squuid)
+                      :user/email       "sean@example.com"
+                      :user/given-name  "Sean"
                       :user/family-name "Grove"}]))
 
 (def migrations

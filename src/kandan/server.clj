@@ -35,11 +35,11 @@
   ;; TODO: Add some authorization here to make sure user is allowed to
   ;; access different version of the js.
   (let [header [:head
-                [:link {:href "/css/base.css" :rel "stylesheet" :type "text/css"}]
-                [:link {:href "/css/index.css" :rel "stylesheet" :type "text/css"}]
-                [:title "Dato • TodoMVC"]
+                [:link {:href "/css/kandan.css" :rel "stylesheet" :type "text/css"}]
+                
+                [:title "Dato • Kandan"]
                 [:script {:type "text/javascript"}
-                 (format "Kandan = {}; Kandan.config = JSON.parse('%s');" (json/encode {:dato-port (config/dato-port)}))]]]
+                 (format "Dato = {}; Dato.config = JSON.parse('%s');" (json/encode {:dato-port (config/dato-port)}))]]]
     (h/html [:html
              header
              [:body
@@ -98,5 +98,7 @@
 
 (comment
   (do
+    ;; Get the intial data loaded
+    (kandan.data-gen/reseed-db! (db-conn/conn))
     (require '[kandan.dev :as dev])
     (kandan.dev/browser-repl)))
