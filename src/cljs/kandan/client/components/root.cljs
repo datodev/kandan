@@ -5,8 +5,11 @@
             [dato.lib.controller :as con]
             [dato.lib.core :as dato]
             [dato.lib.db :as db]
+            [kandan.client.datetime :as dt]
+            [kandan.client.db :as kdb]
             [kandan.client.routes :as routes]
             [kandan.client.utils :as utils]
+            [kandan.client.components.utils :as com-utils]
             [om.core :as om :include-macros true]
             [om-tools.core :refer-macros [defcomponent]]
             [om-tools.dom :as dom]
@@ -75,42 +78,48 @@
           (dom/i {:class "icon-spinner icon-spin"})))))))
 
 (defcomponent navbar [data owner opts]
+  (did-mount [_]
+    (let [conn (dato/conn (om/get-shared owner :dato))]
+      (db/refresh-on! owner conn [[:attr :channel/title]])))
   (display-name [_]
     "Navbar")
   (render [_]
     (let [{:keys [dato]} (om/get-shared owner)
           db             (dato/db dato)
-          channels       (dsu/qes-by db :channel/title)]
+          channels       (dsu/qes-by db :channel/title)
+          l-state        (dato/get-state owner)]
       (dom/nav
-       {:class "nav"}
+       {:class (str "nav"
+                    (when (:search/focused? l-state)
+                      " search-focus"))}
        (dom/form
         {:class     "search"
          :action    "/search"
          :method    "get"
          :on-submit (constantly false)}
         (dom/input
-         {:class     "query"
-          :type      "text"
-          :on-focus  #(js/console.log "global-search-focused")
-          :on-blur   #(js/console.log "global-search-blurred")
-          :on-key-up #(js/console.log "global-search-updated")})
+         {:class    "query"
+          :type     "text"
+          :on-focus #(dato/set-state! owner {:search/focused? true})
+          :on-blur  #(dato/set-state! owner {:search/focused? false})
+          :on-input #(let [new-value (.. % -target -value)]
+                       (when (not= (:search/value l-state) new-value)
+                         (dato/set-state! owner {:search/value (.. % -target -value)})))})
         (dom/input {:class       "submit"
                     :placeholder "Search"
                     :type        "submit"}))
        (dom/ul
         {:id "channel_nav"}
         (for [tab-data (sort-by :channel/title channels)]
-          (do
-            (js/console.log "tab data " tab-data)
-            (om/build tab tab-data)))
+          (om/build tab tab-data))
         (dom/li
          {:key      "new-tab"
-          :on-click (js/console.log "channel-created")}
+          :on-click #(js/console.log "channel-created")}
          (dom/a {:class    "create_channel"
                  :href     "#"
                  :on-click (fn [event]
                              (kill! event)
-                             (js/console.log "channel-created"))}
+                             #(js/console.log "channel-created"))}
                 (dom/strong "+"))))))))
 
 (defmethod con/transition :server/find-tasks-succeeded
@@ -148,7 +157,9 @@
     (let [msg data]
       (dom/div
        {:class "activity"}
-       (dom/time {:class "posted_at"} (:msg/created-at msg))
+       (dom/time
+        {:class "posted_at"}
+        (dt/time-ago (:msg/at msg)) " ago")
        (dom/img {:class "avatar"
                  :src   (get-in msg [:msg/user :user/avatar] "https://secure.gravatar.com/avatar/704ca0ef793c7d10d2c75e0286a5d36b?s=30&d=identicon")})
        (dom/div
@@ -161,9 +172,13 @@
          (:msg/body msg)))))))
 
 (defcomponent channel [data owner opts]
+  (did-mount [_]
+    (let [conn (dato/conn (om/get-shared owner :dato))]
+      (db/refresh-on! owner conn [[:attr :channel/msgs]])))
   (render [_]
     (let [{:keys [dato]} (om/get-shared owner)
           db             (dato/db dato)
+          me             (kdb/me db)
           channels       (dsu/qes-by db :channel/title)
           channel        (d/entity db (:db/id (first channels)))]
       (dom/div
@@ -178,11 +193,30 @@
          "Loading previous messages")
         (dom/div
          {:class "channel-activities"}
-         (for [msg-data (:channel/msgs channel)]
+         (for [msg-data (sort-by :msg/at (:channel/msgs channel))]
            (om/build msg msg-data))))
        (dom/div
         {:class "chatbox"}
-        (dom/textarea {:class "chat-input"})
+        (dom/textarea
+         {:class     "chat-input"
+          :on-key-up (fn [event]
+                       (when (and (com-utils/enter? event)
+                                  (not (com-utils/shift? event)))
+                         (let [msg-eid  (d/tempid :db.part/user)
+                               msg-guid (d/squuid)]
+                           (dato/transact! dato :msg-created
+                                           [{:db/id     msg-eid
+                                             :dato/guid msg-guid
+                                             :dato/type {:db/id (db/enum-id db :kandan.type/msg)}
+                                             :msg/body  (.. event -target -value)
+                                             :msg/user  {:db/id (:db/id me)}
+                                             :msg/at    (js/Date.)}
+                                            {:db/id        (:db/id channel)
+                                             :dato/guid    (:dato/guid channel)
+                                             :channel/msgs [{:db/id msg-eid
+                                                             :dato/guid msg-guid}]}]
+                                           {:tx/persist? true}))
+                         (set! (.-value (.-target event)) "")))})
         (dom/button
          {:class "post"}
          "Post"))))))
@@ -205,17 +239,30 @@
       (om/build channel {})))))
 
 (defcomponent user-menu [data owner opts]
+  (did-mount [_]
+    (let [conn (dato/conn (om/get-shared owner :dato))]
+      (db/refresh-on! owner conn [[:attr :user/nick]
+                                  [:attr :user/email]
+                                  [:attr :user/given-name]
+                                  [:attr :user/family-name]])))
   (render [_]
-    (let [me {:user/disabled?   false
-              :user/email       "sean@bushi.do"
-              :user/nick        "sgrove"
-              :user/given-name  "Sean"
-              :user/family-name "Grove"
-              :user/avatar      "https://secure.gravatar.com/avatar/767934a648524da57388558217ad9c2d?s=25&d=identicon"}]
+    (let [{:keys [dato]} (om/get-shared owner)
+          db             (dato/db dato)
+          session        (kdb/local-session db)
+          channel        (kdb/inspected-channel db session)
+          me             (kdb/me db)
+          l-state        (dato/get-state owner)]
       (dom/div
-       {:class "header user-header open-menu"}
+       ;; change to open-menu to open the menu
+       {:class (str "header user-header"
+                    (when (:menu/open? l-state)
+                      " open-menu"))}
        (dom/a
-        {:class "user-menu-toggle "}
+        {:class "user-menu-toggle "
+         :href "#"
+         :on-click (fn [event]
+                     (kill! event)
+                     (dato/set-state! owner {:menu/open? (not (:menu/open? l-state))}))}
         (dom/img
          {:src (:user/avatar me)}
          (dom/i
@@ -260,8 +307,15 @@
        action)))))
 
 (defcomponent people-widget [data owner opts]
+  (did-mount [_]
+    (let [conn (dato/conn (om/get-shared owner :dato))]
+      (db/refresh-on! owner conn [[:attr :channel/members]])))
   (render [_]
-    (let [user users]
+    (let [{:keys [dato]} (om/get-shared owner)
+          db             (dato/db dato)
+          session        (kdb/local-session db)
+          channel        (kdb/inspected-channel db session)
+          users          (:channel/members channel)]
       (widget "/images/people_icon.png" "People"
               (dom/ul
                {:class "user_list"}
@@ -299,25 +353,18 @@
                  (dom/span))))))))
 
 (defcomponent media-widget [data owner opts]
+  (did-mount [_]
+    (let [conn (dato/conn (om/get-shared owner :dato))]
+      (db/refresh-on! owner conn [[:attr :channel/files]])))
   (render [_]
-    (let [files        [{:file/name    "Penguins.jpg"
-                         :file/comment "Some penguins"
-                         :file/failed? false
-                         :file/mime    :file.type/image}
-                        {:file/name    "Snip20151010_5.png"
-                         :file/comment "Some penguins"
-                         :file/failed? false
-                         :file/mime    :file.type/image}
-                        {:file/name    "LICENSE"
-                         :file/comment "Another license"
-                         :file/failed? false
-                         :file/mime    :file.type/unknown}
-                        {:file/name    "LICENSE"
-                         :file/comment "Some license"
-                         :file/failed? false
-                         :file/mime    :file.type/image}]
-          mime->icon   {:file.type/image "/images/img_icon.png"}
-          default-icon "/images/file_icon.png"]
+    (let [{:keys [dato]} (om/get-shared owner)
+          db             (dato/db dato)
+          session        (kdb/local-session db)
+          channel        (kdb/inspected-channel db session)
+          users          (:channel/members channel)
+          files          (:channel/file channel)
+          mime->icon     {:file.type/image "/images/img_icon.png"}
+          default-icon   "/images/file_icon.png"]
       (widget "/images/media_icon.png" "Media"
               (dom/ul
                {:class "file_list"}
@@ -348,23 +395,7 @@
     (d/unlisten! (dato/conn (om/get-shared owner :dato)) :dato-root))
   (render [_]
     (html
-     (let [{:keys [dato]}   (om/get-shared owner)
-           db               (dato/db dato)
-           transact!        (partial dato/transact! dato)
-           me               (dato/me db)
-           session          (dato/local-session db)
-           task-filter      (:session/task-filter session)
-           pred             (case task-filter
-                              :completed :task/completed?
-                              :active    (complement :task/completed?)
-                              (constantly true))
-           all-tasks        (dsu/qes-by db :task/title)
-           grouped          (group-by :task/completed? all-tasks)
-           active-tasks     (get grouped false)
-           completed-tasks  (get grouped true)
-           shown-tasks      (->> all-tasks
-                                 (filter pred)
-                                 (sort-by :task/order))]
+     (let []
        (dom/div
         {:class ""}
         (dom/aside
