@@ -86,6 +86,7 @@
   (render [_]
     (let [{:keys [dato]} (om/get-shared owner)
           db             (dato/db dato)
+          me             (kdb/me db)
           channels       (dsu/qes-by db :channel/title)
           l-state        (dato/get-state owner)]
       (dom/nav
@@ -119,7 +120,16 @@
                  :href     "#"
                  :on-click (fn [event]
                              (kill! event)
-                             #(js/console.log "channel-created"))}
+                             (when-let [title (js/prompt "New channel title")]
+                               (let [channel-eid (d/tempid :db.part/user)]
+                                 (dato/transact! dato :channel-created
+                                                 [{:db/id           channel-eid
+                                                   :dato/guid       (d/squuid)
+                                                   :channel/title   title
+                                                   :channel/admins  [{:db/id (:db/id me)}]
+                                                   :channel/members [{:db/id (:db/id me)}]
+                                                   :org/_channels   {:db/id (-> me :org/_users first :db/id)}}]
+                                                 {:tx/persist? true}))))}
                 (dom/strong "+"))))))))
 
 (defmethod con/transition :server/find-tasks-succeeded
@@ -205,16 +215,13 @@
                          (let [msg-eid  (d/tempid :db.part/user)
                                msg-guid (d/squuid)]
                            (dato/transact! dato :msg-created
-                                           [{:db/id     msg-eid
-                                             :dato/guid msg-guid
-                                             :dato/type {:db/id (db/enum-id db :kandan.type/msg)}
-                                             :msg/body  (.. event -target -value)
-                                             :msg/user  {:db/id (:db/id me)}
-                                             :msg/at    (js/Date.)}
-                                            {:db/id        (:db/id channel)
-                                             :dato/guid    (:dato/guid channel)
-                                             :channel/msgs [{:db/id msg-eid
-                                                             :dato/guid msg-guid}]}]
+                                           [{:db/id         msg-eid
+                                             :dato/guid     msg-guid
+                                             :dato/type     {:db/id (db/enum-id db :kandan.type/msg)}
+                                             :msg/body      (.. event -target -value)
+                                             :msg/user      {:db/id (:db/id me)}
+                                             :msg/at        (js/Date.)
+                                             :channel/_msgs {:db/id (:db/id channel)}}]
                                            {:tx/persist? true}))
                          (set! (.-value (.-target event)) "")))})
         (dom/button
