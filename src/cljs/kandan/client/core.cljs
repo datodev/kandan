@@ -73,9 +73,11 @@
                
                (r-pull {:name   :initial-pull
                         :pull   '[*
-                                  {:org/users [*]}
-                                  {:org/channels [* {:channel/msgs [*]}]}]
-                        :lookup [:org/name "Bushido"]})
+                                  {:org/_users
+                                   [*
+                                    {:org/users [*]}
+                                    {:org/channels [* {:channel/msgs [*]}]}]}]
+                        :lookup [:user/email "s@bushi.do"]})
                (dato/start-loop! dato {:root container
                                        :router router})))))
        app-root))))
