@@ -5,6 +5,7 @@
               [dato.lib.db :as db]
               [kandan.client.components.root :as com-root]
               [kandan.client.controllers.controls :as controls]
+              [kandan.client.db :as kdb]
               [kandan.client.routes :as routes]
               [kandan.client.utils :as utils]
               [kandan.client.config :as config]
@@ -37,7 +38,7 @@
   (let [ws-host  (str js/window.location.hostname)
         ws-port  (config/dato-port)
         ws-path  "/ws/index.html"
-        app-dato (dato/new-dato ws-host ws-port ws-path conn {})]
+        app-dato (dato/new-dato ws-host ws-port ws-path conn kdb/cs-schema)]
     (atom {:dato app-dato})))
 
 (defn ^:export -main
