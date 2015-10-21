@@ -101,6 +101,8 @@
     ;; File types
     [(enum :file.type/pdf)
      (enum :file.type/image)
+     (enum :file.type/audio)
+     (enum :file.type/video)
      (enum :file.type/link)
      (enum :file.type/text)
      (enum :file.type/office-word)
