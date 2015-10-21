@@ -20,10 +20,8 @@
   (d/entity db (dsu/val-by db :local/current-session)))
 
 (defn me [db]
-  (or ;;(dsu/qe-by db :user/me? true)
-      ;; Placeholder until sessions are in place
-      (dsu/qe-by db :user/email)))
+  (dsu/qe-by db :user/me? true))
 
 (defn inspected-channel [db session]
-  ;; Placeholder until sessions are in place
-  (dsu/qe-by db :channel/title))
+  (let [inspected-channel (:session/inspected session)]
+    (d/entity db inspected-channel)))
