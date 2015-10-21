@@ -5,6 +5,9 @@
             [dato.lib.controller :as con]
             [dato.lib.core :as dato]
             [dato.lib.db :as db]
+            [goog.crypt :as crypt]
+            [goog.crypt.Md5]
+            [kandan.client.components.plugins :as plugins]
             [kandan.client.datetime :as dt]
             [kandan.client.db :as kdb]
             [kandan.client.routes :as routes]
@@ -31,48 +34,40 @@
                      (when select?
                        (.select input))) 20)))
 
-(def users
-  [{:user/disabled?   false
-    :user/email       "sean@bushi.do"
-    :user/nick        "sgrove"
-    :user/given-name  "Sean"
-    :user/family-name "Grove"
-    :user/avatar      "https://secure.gravatar.com/avatar/767934a648524da57388558217ad9c2d?s=25&d=identicon"}
-   {:user/disabled?   false
-    :user/email       "sean@bushi.do"
-    :user/nick        "dww"
-    :user/given-name  "Sean"
-    :user/family-name "Grove"
-    :user/avatar      "https://secure.gravatar.com/avatar/767934a648524da57388558217ad9c2d?s=25&d=identicon"}
-   {:user/disabled?   false
-    :user/email       "sean@bushi.do"
-    :user/nick        "sgdesign"
-    :user/given-name  "Sean"
-    :user/family-name "Grove"
-    :user/avatar      "https://secure.gravatar.com/avatar/767934a648524da57388558217ad9c2d?s=25&d=identicon"}
-   {:user/disabled?   false
-    :user/email       "sean@bushi.do"
-    :user/nick        "mrab"
-    :user/given-name  "Sean"
-    :user/family-name "Grove"
-    :user/avatar      "https://secure.gravatar.com/avatar/767934a648524da57388558217ad9c2d?s=25&d=identicon"}])
+(defn email->gravatar-url [email]
+  (let [email (or email "unknown-email@unknown-domain.com")
+        container (doto (goog.crypt.Md5.)
+                    (.update email))
+        hash (crypt/byteArrayToHex (.digest container))]
+    (str "http://gravatar.com/avatar/" hash "?s=30&d=identicon")))
 
 (defcomponent tab [data owner opts]
   (display-name [_]
     "Tab")
+  (did-mount [_]
+    (let [conn (dato/conn (om/get-shared owner :dato))]
+      (db/refresh-on! owner conn [[:attr :session/inspected]])))
   (render [_]
-    (let [channel  data
-          loading? false]
+    (let [{:keys [dato]} (om/get-shared owner)
+          db             (dato/db dato)
+          me             (kdb/me db)
+          channel        data
+          session        (kdb/local-session db)
+          selected       (kdb/inspected-channel db session)
+          loading?       false]
       (dom/li
        {:key   (:channel/title data)
         :class (str "protected "
                     ;;(utils/safe-sel (:channel/title data))
-                    (when (:selected? channel) " active"))}
+                    (when (= (:db/id selected) (:db/id channel)) " active"))}
        (dom/a
         {:class    "show_channel"
+         :href     "#"
          :on-click (fn [event]
                      (kill! event)
-                     (js/console.log "tab-selected"))}
+                     (dato/transact! dato :channel-selected
+                                     [{:db/id             (:db/id session)
+                                       :session/inspected (:db/id channel)}]))}
         (:channel/title channel)
         (when loading?
           (dom/i {:class "icon-spinner icon-spin"})))))))
@@ -80,6 +75,7 @@
 (defcomponent navbar [data owner opts]
   (did-mount [_]
     (let [conn (dato/conn (om/get-shared owner :dato))]
+      (js/window.setInterval #(om/refresh! owner) 500)
       (db/refresh-on! owner conn [[:attr :channel/title]])))
   (display-name [_]
     "Navbar")
@@ -114,8 +110,7 @@
         (for [tab-data (sort-by :channel/title channels)]
           (om/build tab tab-data))
         (dom/li
-         {:key      "new-tab"
-          :on-click #(js/console.log "channel-created")}
+         {:key "new-tab"}
          (dom/a {:class    "create_channel"
                  :href     "#"
                  :on-click (fn [event]
@@ -159,19 +154,46 @@
   (routes/start! router))
 
 (defn display-name [user-ent]
-  (or (:user/nick user-ent)
+  (or (when (and (:user/given-name user-ent) (:user/family-name user-ent))
+        (str (:user/given-name user-ent) " " (:user/family-name user-ent)))
+      (:user/nick user-ent)
       (:user/email user-ent)))
+
+(def delimiter-re
+  #" ")
+
+(defn expand-msg [current-user msg]
+  (let [members (get-in msg [:channel/_msgs :channel/members])]
+    (let [content (-> (string/split (:msg/body msg) delimiter-re)
+                      plugins/pastie
+                      (plugins/mentions members)
+                      (plugins/slash-me current-user members)
+                      plugins/slash-play
+                      plugins/emoticons
+                      plugins/image-embed
+                      plugins/youtube-embed
+                      plugins/vimeo-embed
+                      plugins/links
+                      plugins/rgb-embed
+                      plugins/hex-embed)]
+      (interpose " " content))))
 
 (defcomponent msg [data owner opts]
   (render [_]
-    (let [msg data]
+    (let [{:keys [dato]} (om/get-shared owner)
+          db             (dato/db dato)
+          me             (kdb/me db)
+          msg            data
+          channel        (d/entity db (:channel/_msgs msg))
+          members        (:channel/members channel)]
       (dom/div
        {:class "activity"}
        (dom/time
         {:class "posted_at"}
         (dt/time-ago (:msg/at msg)) " ago")
        (dom/img {:class "avatar"
-                 :src   (get-in msg [:msg/user :user/avatar] "https://secure.gravatar.com/avatar/704ca0ef793c7d10d2c75e0286a5d36b?s=30&d=identicon")})
+                 :src   (or (get-in msg [:msg/user :user/avatar])
+                            (email->gravatar-url (get-in msg [:msg/user :user/email])))})
        (dom/div
         {:class "readable"}
         (dom/span
@@ -179,21 +201,35 @@
          (display-name (:msg/user msg)))
         (dom/span
          {:class "content"}
-         (:msg/body msg)))))))
+         (expand-msg me msg)))))))
 
 (defcomponent channel [data owner opts]
   (did-mount [_]
-    (let [conn (dato/conn (om/get-shared owner :dato))]
-      (db/refresh-on! owner conn [[:attr :channel/msgs]])))
+    (let [conn                   (dato/conn (om/get-shared owner :dato))
+          node                   (om/get-node owner)
+          message-area           (.querySelector node ".paginated-activities")]
+      (db/refresh-on! owner conn [[:attr :session/inspected]
+                                  [:attr :channel/msgs]])))
+  (did-update [_ _ _]
+              (let [node                (om/get-node owner)
+                    message-area        (.querySelector node ".paginated-activities")
+                    bottom              (- (.-scrollHeight message-area)
+                                           (.-offsetHeight message-area))
+                    scrolled-to-bottom? (== (.-scrollTop message-area) bottom)]
+                ;; TODO: Only scroll when appropriate
+                (set! (.-myNode js/window) message-area)
+                (set! (.-scrollTop message-area) bottom)))
   (render [_]
     (let [{:keys [dato]} (om/get-shared owner)
           db             (dato/db dato)
           me             (kdb/me db)
-          channels       (dsu/qes-by db :channel/title)
-          channel        (d/entity db (:db/id (first channels)))]
+          session        (kdb/local-session db)
+          channel        (kdb/inspected-channel db session)
+          msgs           (->> (:channel/msgs channel)
+                              (sort-by :msg/at)
+                              (take-last 10))]
       (dom/div
-       {:id    "channels-1"
-        :class "channels-pane active"}
+       {:class "channels-pane active"}
        (dom/div
         {:class "paginated-activities"}
         (dom/div
@@ -203,7 +239,7 @@
          "Loading previous messages")
         (dom/div
          {:class "channel-activities"}
-         (for [msg-data (sort-by :msg/at (:channel/msgs channel))]
+         (for [msg-data msgs]
            (om/build msg msg-data))))
        (dom/div
         {:class "chatbox"}
@@ -248,7 +284,8 @@
 (defcomponent user-menu [data owner opts]
   (did-mount [_]
     (let [conn (dato/conn (om/get-shared owner :dato))]
-      (db/refresh-on! owner conn [[:attr :user/nick]
+      (db/refresh-on! owner conn [[:attr :user/me?]
+                                  [:attr :user/nick]
                                   [:attr :user/email]
                                   [:attr :user/given-name]
                                   [:attr :user/family-name]])))
@@ -265,16 +302,18 @@
                     (when (:menu/open? l-state)
                       " open-menu"))}
        (dom/a
-        {:class "user-menu-toggle "
-         :href "#"
+        {:class    "user-menu-toggle "
+         :href     "#"
          :on-click (fn [event]
                      (kill! event)
                      (dato/set-state! owner {:menu/open? (not (:menu/open? l-state))}))}
         (dom/img
-         {:src (:user/avatar me)}
+         {:src (or (:user/avatar me)
+                   (email->gravatar-url (:user/email me)))}
          (dom/i
           {:class "icon-angle button right"
            :style {:height 24}})
+         (js/console.log "me " (when me (dsu/t me)))
          (display-name me)))
        (dom/ul
         {:class "user-menu"}
@@ -316,7 +355,8 @@
 (defcomponent people-widget [data owner opts]
   (did-mount [_]
     (let [conn (dato/conn (om/get-shared owner :dato))]
-      (db/refresh-on! owner conn [[:attr :channel/members]])))
+      (db/refresh-on! owner conn [[:attr :session/inspected]
+                                  [:attr :channel/members]])))
   (render [_]
     (let [{:keys [dato]} (om/get-shared owner)
           db             (dato/db dato)
@@ -332,46 +372,53 @@
                    :title (:user/nick user)}
                   (dom/img
                    {:class "avatar"
-                    :src (:user/avatar user)})
+                    :src (or (:user/avatar user)
+                             (email->gravatar-url (:user/email user)))})
                   (display-name user))))))))
 
 (defcomponent notifications-widget [data owner opts]
+  (did-mount [_]
+    (let [conn (dato/conn (om/get-shared owner :dato))]
+      (db/refresh-on! owner conn [[:attr :session/inspected]])))
   (render [_]
-    (let [user users]
-      (widget "/images/people_icon.png" "Notifications"
-              (dom/ul
-               {:class "notifications_list"}
-               (dom/li
-                {:class "notification popup-notifications"}
-                (dom/label
-                 (dom/input
-                  {:class "switch"
-                   :type  "checkbox"}
-                  "Desktop Notifications")
-                 (dom/span)))
-               (dom/li
-                {:class "notification popup-notifications"}
-                (dom/label
-                 (dom/input
-                  {:class   "switch"
-                   :checked true
-                   :type    "checkbox"}
-                  "Sounds")
-                 (dom/span))))))))
+    (widget "/images/people_icon.png" "Notifications"
+            (dom/ul
+             {:class "notifications_list"}
+             (dom/li
+              {:class "notification popup-notifications"}
+              (dom/label
+               (dom/input
+                {:class "switch"
+                 :type  "checkbox"}
+                "Desktop Notifications")
+               (dom/span)))
+             (dom/li
+              {:class "notification popup-notifications"}
+              (dom/label
+               (dom/input
+                {:class   "switch"
+                 :checked true
+                 :type    "checkbox"}
+                "Sounds")
+               (dom/span)))))))
 
 (defcomponent media-widget [data owner opts]
   (did-mount [_]
     (let [conn (dato/conn (om/get-shared owner :dato))]
-      (db/refresh-on! owner conn [[:attr :channel/files]])))
+      (db/refresh-on! owner conn [[:attr :session/inspected]
+                                  [:attr :channel/files]])))
   (render [_]
     (let [{:keys [dato]} (om/get-shared owner)
           db             (dato/db dato)
           session        (kdb/local-session db)
           channel        (kdb/inspected-channel db session)
-          users          (:channel/members channel)
-          files          (:channel/file channel)
-          mime->icon     {:file.type/image "/images/img_icon.png"}
+          files          (:channel/files channel)
+          mime->icon     {:file.type/image "/images/img_icon.png"
+                          :file.type/audio "/images/audio_icon.png"
+                          :file.type/video "/images/video_icon.png"
+                          :file.type/pdf   "/images/media_icon.png"}
           default-icon   "/images/file_icon.png"]
+      (js/console.log "files: " (map dsu/t files))
       (widget "/images/media_icon.png" "Media"
               (dom/ul
                {:class "file_list"}
@@ -380,9 +427,9 @@
                   {:class "file_item"}
                   (dom/a
                    {:target "_blank"
-                    :href   "/whatever"}
+                    :href   (:file/src file)}
                    (dom/img
-                    {:src (get mime->icon (:file/mime file) default-icon)})
+                    {:src (get mime->icon (db/enum db (:file/type file)) default-icon)})
                    (:file/name file)))))
               (dom/form
                {:id             "file_upload"
@@ -402,16 +449,20 @@
     (d/unlisten! (dato/conn (om/get-shared owner :dato)) :dato-root))
   (render [_]
     (html
-     (let []
-       (dom/div
-        {:class ""}
-        (dom/aside
-         {:class "sidebar"}
-         (om/build user-menu {})
+     (let [{:keys [dato]} (om/get-shared owner)
+           db             (dato/db dato)
+           me             (kdb/me db)]
+       (if me
          (dom/div
-          {:class "widgets"}
-          (om/build people-widget {})
-          (om/build notifications-widget {})
-          (om/build media-widget {})))
-        (om/build main-area {})
-        (om/build navbar {}))))))
+          {:class ""}
+          (dom/aside
+           {:class "sidebar"}
+           (om/build user-menu {})
+           (dom/div
+            {:class "widgets"}
+            (om/build people-widget {})
+            (om/build notifications-widget {})
+            (om/build media-widget {})))
+          (om/build main-area {})
+          (om/build navbar {}))
+         (dom/div "Loading..."))))))
