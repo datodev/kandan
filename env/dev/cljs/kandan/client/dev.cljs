@@ -3,7 +3,7 @@
             [devtools.core :as devtools]
             [figwheel.client :as figwheel :include-macros true]
             [kandan.client.core :as kandan-core]
-            [kandan.client.debug :as todo-debug]
+            [kandan.client.debug :as k-debug]
             [kandan.client.utils :as utils]
             [om.core :as om]
             [om-i.core :as om-i]
@@ -48,6 +48,6 @@
              {:target (utils/sel1 root-node :.debugger-container)
               :shared {:dato     dato
                        :app-root app-root}
-              :opts   {:expressions todo-debug/watched-expressions}})))
+              :opts   {:expressions k-debug/watched-expressions}})))
 
 (-main)
