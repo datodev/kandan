@@ -28,6 +28,7 @@
                  [bk/ring-gzip "0.1.1"]
                  [cheshire "5.5.0" :exclusions [org.clojure/clojure org.clojure/clojurescript com.fasterxml.jackson.core/jackson-core]]
                  [cljsjs/codemirror "5.6.0-0"]
+                 [cljsjs/highlight "8.4-0"]
                  [cljsjs/react "0.12.2-8"]
                  [clojurewerkz/scrypt "1.2.0"]
                  [com.cognitect/transit-clj "0.8.275" :exclusions [com.fasterxml.jackson.core/jackson-core]]
