@@ -36,6 +36,7 @@
   ;; access different version of the js.
   (let [header [:head
                 [:link {:href "/css/kandan.css" :rel "stylesheet" :type "text/css"}]
+                [:link {:href "/highlight/css/monokai.min.css" :rel "stylesheet" :type "text/css"}]
                 
                 [:title "Dato • Kandan"]
                 [:script {:type "text/javascript"}
@@ -54,6 +55,7 @@
     (let [path    (get-in request [:params :path])
           macros? (get-in request [:params :macros])]
       {:body (json/generate-string (dato-debug/source-path->source macros? path))}))
+  (route/resources "/highlight/css/" {:root "cljsjs/common/highlight/"})
   (route/resources "/")
   (GET "/*" request
     (bootstrap-html (:params request))))
