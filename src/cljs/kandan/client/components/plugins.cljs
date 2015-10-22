@@ -1,6 +1,7 @@
 (ns kandan.client.components.plugins
   (:require [clojure.string :as string]
             [kandan.client.components.emoticons :as emoticons]
+            [kandan.client.components.highlight :as highlight]
             [om-tools.dom :as dom]))
 
 (defn mention [name]
@@ -51,23 +52,25 @@
   (let [max-preview-length 300
         max-preview-lines  4
         original           (string/join " " activity-pieces)]
-    (if (re-find #"\n.*\n" original)
-      [(dom/pre
-         {:class "pastie"}
-         (dom/a
-          {:class    "pastie-link"
-           :href     "#"
-           :on-click (constantly false)}
-          "View pastie")
-         (dom/br)
-         (let [preview (as-> original preview
-                         (if (> (count (string/split #"\n" preview)) max-preview-lines)
-                           (string/join "\n" (take max-preview-lines (string/split #"\n" preview)))
-                           preview)
-                         (if (> (count preview) max-preview-length)
-                           (subs preview 0 max-preview-length)
-                           preview))]
-           (list preview (when (not= (count preview) (count original)) "..."))))]
+    (if-let [[_ original] (re-find #"```(.*```" original)]
+      [(dom/div
+        {:class "pastie"}
+        (let [preview-line-count (count (string/split #"\n" original))
+              preview-src        (as-> original preview
+                                   (if (> preview-line-count max-preview-lines)
+                                     (string/join "\n" (take max-preview-lines (string/split #"\n" preview)))
+                                     preview)
+                                   (if (> (count preview) max-preview-length)
+                                     (subs preview 0 max-preview-length)
+                                     preview)
+                                   (highlight/highlight preview))]
+          (list (dom/pre #js{:dangerouslySetInnerHTML #js{:__html (aget preview-src "value")}})
+                (dom/br)
+                (dom/a
+                 {:class    "pastie-link"
+                  :href     "#"
+                  :on-click (constantly false)}
+                 "View pastie" (when (not= preview-line-count (count original)) "...")))))]
       activity-pieces)))
 
 (defn slash-me [activity-pieces me users]
