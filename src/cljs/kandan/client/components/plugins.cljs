@@ -48,13 +48,13 @@
                    piece))]
     (map helper activity-pieces)))
 
-(defn pastie [activity-pieces]
+(defn code [activity-pieces]
   (let [max-preview-length 300
         max-preview-lines  4
         original           (string/join " " activity-pieces)]
-    (if-let [[_ original] (re-find #"```(.*```" original)]
+    (if-let [[_ ?lang original] (re-find #"```(.*)?([\s\S]+)```" original)]
       [(dom/div
-        {:class "pastie"}
+        {:class "code"}
         (let [preview-line-count (count (string/split #"\n" original))
               preview-src        (as-> original preview
                                    (if (> preview-line-count max-preview-lines)
@@ -65,6 +65,31 @@
                                      preview)
                                    (highlight/highlight preview))]
           (list (dom/pre #js{:dangerouslySetInnerHTML #js{:__html (aget preview-src "value")}})
+                (dom/br)
+                (dom/a
+                 {:class    "pastie-link"
+                  :href     "#"
+                  :on-click (constantly false)}
+                 "View pastie" (when (not= preview-line-count (count original)) "...")))))]
+      activity-pieces)))
+
+(defn pastie [activity-pieces]
+  (let [max-preview-length 300
+        max-preview-lines  4
+        original           (string/join " " activity-pieces)]
+    (if (re-find #"\n.*\n" original)
+      [(dom/div
+        {:class "pastie"}
+        (let [preview-line-count (count (string/split #"\n" original))
+              preview-src        (as-> original preview
+                                   (if (> preview-line-count max-preview-lines)
+                                     (string/join "\n" (take max-preview-lines (string/split #"\n" preview)))
+                                     preview)
+                                   (if (> (count preview) max-preview-length)
+                                     (subs preview 0 max-preview-length)
+                                     preview)
+                                   preview)]
+          (list (dom/pre preview-src)
                 (dom/br)
                 (dom/a
                  {:class    "pastie-link"

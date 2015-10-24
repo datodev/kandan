@@ -165,6 +165,7 @@
 (defn expand-msg [current-user msg]
   (let [members (get-in msg [:channel/_msgs :channel/members])]
     (let [content (-> (string/split (:msg/body msg) delimiter-re)
+                      plugins/code
                       plugins/pastie
                       (plugins/mentions members)
                       (plugins/slash-me current-user members)
