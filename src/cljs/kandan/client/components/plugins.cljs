@@ -70,7 +70,7 @@
                  {:class    "pastie-link"
                   :href     "#"
                   :on-click (constantly false)}
-                 "View pastie" (when (not= preview-line-count (count original)) "...")))))]
+                 "View code snippet" (when (not= preview-line-count (count original)) "...")))))]
       activity-pieces)))
 
 (defn pastie [activity-pieces]
