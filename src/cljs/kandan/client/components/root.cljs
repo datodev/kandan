@@ -41,6 +41,15 @@
         hash (crypt/byteArrayToHex (.digest container))]
     (str "http://gravatar.com/avatar/" hash "?s=30&d=identicon")))
 
+(defn update-setting! [dato db settings k v]
+  (let [txn [{:db/id (:db/id settings)
+              k      v}]]
+    (dato/transact! dato :chanuser-setting-updated txn
+                    {:tx/persist? true})))
+
+(defn chanuser [channel user]
+  (first (filter #(= (:chanuser/user %) user) (:channel/chanusers channel))))
+
 (defcomponent tab [data owner opts]
   (display-name [_]
     "Tab")
@@ -228,6 +237,8 @@
           session               (kdb/local-session db)
           channel               (kdb/inspected-channel db session)
           i-am-in-this-channel? (get (:channel/members channel) me)
+          settings              (and i-am-in-this-channel?
+                                     (chanuser channel me))
           msgs                  (->> (:channel/msgs channel)
                                      (sort-by :msg/at)
                                      (take-last 10))]
@@ -250,6 +261,9 @@
                                 {:class "chatbox"}
                                 (dom/textarea
                                  {:class     "chat-input"
+                                  :on-change (fn [event]
+                                               (when settings
+                                                 (update-setting! dato db settings :chanuser/last-typed-at (js/Date.))))
                                   :on-key-up (fn [event]
                                                (when (and (com-utils/enter? event)
                                                           (not (com-utils/shift? event)))
@@ -275,11 +289,19 @@
                                   :style    {:backgroundColor "gray"}
                                   :disabled true})
                                 (dom/button
-                                 {:class "post"
-                                  :on-click #(dato/transact! dato :channel-joined
-                                                             [{:db/id           (:db/id channel)
-                                                               :channel/members [{:db/id (:db/id me)}]}]
-                                                             {:tx/persist? true})}
+                                 {:class    "post"
+                                  :on-click #(let [chanuser-eid (d/tempid :db.part/user)]
+                                               (dato/transact! dato :channel-joined
+                                                               [{:db/id                                    chanuser-eid
+                                                                 :dato/guid                                (d/squuid)
+                                                                 :chanuser/user                            (:db/id me)
+                                                                 :chanuser.notifications/general           (db/enum-id db :notification.level/all)
+                                                                 :chanuser.notifications/everyone-and-here (db/enum-id db :notification.level/all)
+                                                                 :chanuser.notifications/muted?            false}
+                                                                {:db/id             (:db/id channel)
+                                                                 :channel/members   [{:db/id (:db/id me)}]
+                                                                 :channel/chanusers [{:db/id chanuser-eid}]}]
+                                                               {:tx/persist? true}))}
                                  "Join")))))))
 
 ;; TODO: This will get killed with the new design
@@ -331,7 +353,6 @@
          (dom/i
           {:class "icon-angle button right"
            :style {:height 24}})
-         (js/console.log "me " (when me (dsu/t me)))
          (display-name me)))
        (dom/ul
         {:class "user-menu"}
@@ -374,7 +395,8 @@
   (did-mount [_]
     (let [conn (dato/conn (om/get-shared owner :dato))]
       (db/refresh-on! owner conn [[:attr :session/inspected]
-                                  [:attr :channel/members]])))
+                                  [:attr :channel/members]
+                                  [:attr :chanuser/last-typed-at]])))
   (render [_]
     (let [{:keys [dato]} (om/get-shared owner)
           db             (dato/db dato)
@@ -384,41 +406,75 @@
       (widget "/images/people_icon.png" "People"
               (dom/ul
                {:class "user_list"}
-               (for [user users]
+               (for [user (sort-by display-name users)
+                     :let [settings (chanuser channel user)
+                           is-typing? (when-let [last-typed (:chanuser/last-typed-at settings)]
+                                        (< (- (.getTime (js/Date.)) (.getTime last-typed))
+                                           5000))]]
                  (dom/li
                   {:class "user"
                    :title (:user/nick user)}
                   (dom/img
                    {:class "avatar"
-                    :src (or (:user/avatar user)
-                             (email->gravatar-url (:user/email user)))})
+                    :src   (or (:user/avatar user)
+                               (email->gravatar-url (:user/email user)))})
+                  (when is-typing? (str " " "⌨"))
                   (display-name user))))))))
 
 (defcomponent notifications-widget [data owner opts]
   (did-mount [_]
     (let [conn (dato/conn (om/get-shared owner :dato))]
-      (db/refresh-on! owner conn [[:attr :session/inspected]])))
+      (db/refresh-on! owner conn [[:attr :session/inspected]
+                                  [:attr :channel/members]
+                                  [:attr :chanuser.notifications/general]
+                                  [:attr :chanuser.notifications/everyone-and-here]])))
   (render [_]
-    (widget "/images/people_icon.png" "Notifications"
-            (dom/ul
-             {:class "notifications_list"}
-             (dom/li
-              {:class "notification popup-notifications"}
-              (dom/label
-               (dom/input
-                {:class "switch"
-                 :type  "checkbox"}
-                "Desktop Notifications")
-               (dom/span)))
-             (dom/li
-              {:class "notification popup-notifications"}
-              (dom/label
-               (dom/input
-                {:class   "switch"
-                 :checked true
-                 :type    "checkbox"}
-                "Sounds")
-               (dom/span)))))))
+    (let [{:keys [dato]}  (om/get-shared owner)
+          db              (dato/db dato)
+          me              (kdb/me db)
+          session         (kdb/local-session db)
+          channel         (kdb/inspected-channel db session)
+          members         (:channel/members channel)
+          settings        (chanuser channel me)]
+      (widget "/images/people_icon.png" "Notifications"
+              (if (and (get members me)
+                       settings)
+                (dom/ul
+                 {:class "notifications_list"}
+                 (dom/li
+                  {:class "notification popup-notifications"}
+                  (dom/label
+                   (dom/input
+                    {:class     "switch"
+                     :checked   (= (db/enum db (:chanuser.notifications/general settings))
+                                   :notification.level/all)
+                     :on-change (fn [event]
+                                  (let [checked? (.. event -target -checked)
+                                        level    (db/enum-id db (if checked?
+                                                                  :notification.level/all
+                                                                  :notification.level/none))]
+                                    (update-setting! dato db settings :chanuser.notifications/general level)))
+                     :type      "checkbox"}
+                    "All")
+                   (dom/span)))
+                 (dom/li
+                  {:class "notification popup-notifications"}
+                  (dom/label
+                   (dom/input
+                    {:class     "switch"
+                     :checked   (= (db/enum db (:chanuser.notifications/everyone-and-here settings))
+                                   :notification.level/all)
+                     :on-change (fn [event]
+                                  (let [checked? (.. event -target -checked)
+                                        level    (db/enum-id db (if checked?
+                                                                  :notification.level/all
+                                                                  :notification.level/none))]
+                                    (update-setting! dato db settings :chanuser.notifications/everyone-and-here level)))
+                     :type      "checkbox"}
+                    "@everyone")
+                   (dom/span))))
+                (dom/div
+                 "-"))))))
 
 (defcomponent media-widget [data owner opts]
   (did-mount [_]
@@ -436,7 +492,6 @@
                           :file.type/video "/images/video_icon.png"
                           :file.type/pdf   "/images/media_icon.png"}
           default-icon   "/images/file_icon.png"]
-      (js/console.log "files: " (map dsu/t files))
       (widget "/images/media_icon.png" "Media"
               (dom/ul
                {:class "file_list"}

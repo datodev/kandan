@@ -78,7 +78,9 @@
                                    [*
                                     {:org/users [*]}
                                     {:org/channels [* {:channel/msgs [*]}]}]}]
-                        :lookup [:user/email "s@bushi.do"]})
+                        :lookup [:user/email (nth ["dww@gmail.com"
+                                                   "s@bushi.do"]
+                                                  0)]})
                (dato/start-loop! dato {:root container
                                        :router router})))))
        app-root))))

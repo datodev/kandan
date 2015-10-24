@@ -64,31 +64,33 @@
                 :db/isComponent true)]
     
     ;; Channels
-    [(attribute :channel/title   :db.type/string)
-     (attribute :channel/topic   :db.type/string)
-     (attribute :channel/created-at   :db.type/instant)
-     (attribute :channel/admins  :db.type/ref
-                :db/cardinality  :db.cardinality/many)
-     (attribute :channel/members :db.type/ref
-                :db/cardinality  :db.cardinality/many)
-     (attribute :channel/msgs    :db.type/ref
-                :db/cardinality  :db.cardinality/many
-                :db/isComponent  true)
-     (attribute :channel/files   :db.type/ref
-                :db/cardinality  :db.cardinality/many
-                :db/isComponent  true)
-     (attribute :channel/notification-settings :db.type/ref
-                :db/cardinality :db.cardinality/many
-                :db/isComponent true)]
+    [(attribute :channel/title      :db.type/string)
+     (attribute :channel/topic      :db.type/string)
+     (attribute :channel/created-at :db.type/instant)
+     (attribute :channel/admins     :db.type/ref
+                :db/cardinality     :db.cardinality/many)
+     (attribute :channel/members    :db.type/ref
+                :db/cardinality     :db.cardinality/many)
+     (attribute :channel/msgs       :db.type/ref
+                :db/cardinality     :db.cardinality/many
+                :db/isComponent     true)
+     (attribute :channel/files      :db.type/ref
+                :db/cardinality     :db.cardinality/many
+                :db/isComponent     true)
+     (attribute :channel/chanusers  :db.type/ref
+                :db/cardinality     :db.cardinality/many
+                :db/isComponent     true)]
 
     [(enum :notification.level/all)
      (enum :notification.level/me)
      (enum :notification.level/none)]
 
-    ;; Notification setting
-    [(attribute :notification/general           :db.type/ref)
-     (attribute :notification/everyone-and-here :db.type/ref)
-     (attribute :notification/muted?            :db.type/boolean)]
+    ;; Channel/user entity
+    [(attribute :chanuser/user                            :db.type/ref)
+     (attribute :chanuser/last-typed-at                   :db.type/instant)
+     (attribute :chanuser.notifications/general           :db.type/ref)
+     (attribute :chanuser.notifications/everyone-and-here :db.type/ref)
+     (attribute :chanuser.notifications/muted?            :db.type/boolean)]
 
     ;; Messages
     [(attribute :msg/body       :db.type/string)

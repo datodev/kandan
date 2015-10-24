@@ -103,4 +103,14 @@
     ;; Get the intial data loaded
     (kandan.data-gen/reseed-db! (db-conn/conn))
     (require '[kandan.dev :as dev])
-    (kandan.dev/browser-repl)))
+    (kandan.dev/browser-repl))
+
+  ;; Dev helper function to clear channel members from ALL channels
+  (reduce into (mapcat (comp (fn [[channel members]]
+                                              (for [member members]
+                                                (let [settings (first (filter #(= (:chanuser/user %) member) (:channel/chanusers channel)))]
+                                                  (into
+                                                   [[:db/retract (:db/id channel) :channel/members (:db/id member)]]
+                                                   (if settings
+                                                     [[:db.fn/retractEntity (:db/id settings)]]
+                                                     []))))) (juxt identity :channel/members)) (dsu/qes-by (db-conn/ddb) :channel/title))))
