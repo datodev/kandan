@@ -210,7 +210,8 @@
           node                   (om/get-node owner)
           message-area           (.querySelector node ".paginated-activities")]
       (db/refresh-on! owner conn [[:attr :session/inspected]
-                                  [:attr :channel/msgs]])))
+                                  [:attr :channel/msgs]
+                                  [:attr :channel/members]])))
   (did-update [_ _ _]
               (let [node                (om/get-node owner)
                     message-area        (.querySelector node ".paginated-activities")
@@ -221,14 +222,15 @@
                 (set! (.-myNode js/window) message-area)
                 (set! (.-scrollTop message-area) bottom)))
   (render [_]
-    (let [{:keys [dato]} (om/get-shared owner)
-          db             (dato/db dato)
-          me             (kdb/me db)
-          session        (kdb/local-session db)
-          channel        (kdb/inspected-channel db session)
-          msgs           (->> (:channel/msgs channel)
-                              (sort-by :msg/at)
-                              (take-last 10))]
+    (let [{:keys [dato]}        (om/get-shared owner)
+          db                    (dato/db dato)
+          me                    (kdb/me db)
+          session               (kdb/local-session db)
+          channel               (kdb/inspected-channel db session)
+          i-am-in-this-channel? (get (:channel/members channel) me)
+          msgs                  (->> (:channel/msgs channel)
+                                     (sort-by :msg/at)
+                                     (take-last 10))]
       (dom/div
        {:class "channels-pane active"}
        (dom/div
@@ -242,28 +244,43 @@
          {:class "channel-activities"}
          (for [msg-data msgs]
            (om/build msg msg-data))))
-       (dom/div
-        {:class "chatbox"}
-        (dom/textarea
-         {:class     "chat-input"
-          :on-key-up (fn [event]
-                       (when (and (com-utils/enter? event)
-                                  (not (com-utils/shift? event)))
-                         (let [msg-eid  (d/tempid :db.part/user)
-                               msg-guid (d/squuid)]
-                           (dato/transact! dato :msg-created
-                                           [{:db/id         msg-eid
-                                             :dato/guid     msg-guid
-                                             :dato/type     {:db/id (db/enum-id db :kandan.type/msg)}
-                                             :msg/body      (.. event -target -value)
-                                             :msg/user      {:db/id (:db/id me)}
-                                             :msg/at        (js/Date.)
-                                             :channel/_msgs {:db/id (:db/id channel)}}]
-                                           {:tx/persist? true}))
-                         (set! (.-value (.-target event)) "")))})
-        (dom/button
-         {:class "post"}
-         "Post"))))))
+       (cond
+         (nil? channel)        (dom/div "Looks like you're not in a channel yet. Choose one to get chattin'!")
+         i-am-in-this-channel? (dom/div
+                                {:class "chatbox"}
+                                (dom/textarea
+                                 {:class     "chat-input"
+                                  :on-key-up (fn [event]
+                                               (when (and (com-utils/enter? event)
+                                                          (not (com-utils/shift? event)))
+                                                 (let [msg-eid  (d/tempid :db.part/user)
+                                                       msg-guid (d/squuid)]
+                                                   (dato/transact! dato :msg-created
+                                                                   [{:db/id         msg-eid
+                                                                     :dato/guid     msg-guid
+                                                                     :dato/type     {:db/id (db/enum-id db :kandan.type/msg)}
+                                                                     :msg/body      (.. event -target -value)
+                                                                     :msg/user      {:db/id (:db/id me)}
+                                                                     :msg/at        (js/Date.)
+                                                                     :channel/_msgs {:db/id (:db/id channel)}}]
+                                                                   {:tx/persist? true}))
+                                                 (set! (.-value (.-target event)) "")))})
+                                (dom/button
+                                 {:class "post"}
+                                 "Post"))
+         :else                 (dom/div
+                                {:class "chatbox"}
+                                (dom/textarea
+                                 {:class    "chat-input"
+                                  :style    {:backgroundColor "gray"}
+                                  :disabled true})
+                                (dom/button
+                                 {:class "post"
+                                  :on-click #(dato/transact! dato :channel-joined
+                                                             [{:db/id           (:db/id channel)
+                                                               :channel/members [{:db/id (:db/id me)}]}]
+                                                             {:tx/persist? true})}
+                                 "Join")))))))
 
 ;; TODO: This will get killed with the new design
 (defcomponent main-area [data owner opts]
