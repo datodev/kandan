@@ -254,7 +254,7 @@
         (dom/div
          {:class "channel-activities"}
          (for [msg-data msgs]
-           (om/build msg msg-data))))
+           (om/build msg msg-data {:react-key (:db/id msg-data)}))))
        (cond
          (nil? channel)        (dom/div "Looks like you're not in a channel yet. Choose one to get chattin'!")
          i-am-in-this-channel? (dom/div
