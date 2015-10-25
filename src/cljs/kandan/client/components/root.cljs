@@ -264,21 +264,22 @@
                                   :on-change (fn [event]
                                                (when settings
                                                  (update-setting! dato db settings :chanuser/last-typed-at (js/Date.))))
-                                  :on-key-up (fn [event]
-                                               (when (and (com-utils/enter? event)
-                                                          (not (com-utils/shift? event)))
-                                                 (let [msg-eid  (d/tempid :db.part/user)
-                                                       msg-guid (d/squuid)]
-                                                   (dato/transact! dato :msg-created
-                                                                   [{:db/id         msg-eid
-                                                                     :dato/guid     msg-guid
-                                                                     :dato/type     {:db/id (db/enum-id db :kandan.type/msg)}
-                                                                     :msg/body      (.. event -target -value)
-                                                                     :msg/user      {:db/id (:db/id me)}
-                                                                     :msg/at        (js/Date.)
-                                                                     :channel/_msgs {:db/id (:db/id channel)}}]
-                                                                   {:tx/persist? true}))
-                                                 (set! (.-value (.-target event)) "")))})
+                                  :on-key-press (fn [event]
+                                                  (when (and (com-utils/enter? event)
+                                                             (not (com-utils/shift? event)))
+                                                    (kill! event)
+                                                    (let [msg-eid  (d/tempid :db.part/user)
+                                                          msg-guid (d/squuid)]
+                                                      (dato/transact! dato :msg-created
+                                                                      [{:db/id         msg-eid
+                                                                        :dato/guid     msg-guid
+                                                                        :dato/type     {:db/id (db/enum-id db :kandan.type/msg)}
+                                                                        :msg/body      (.. event -target -value)
+                                                                        :msg/user      {:db/id (:db/id me)}
+                                                                        :msg/at        (js/Date.)
+                                                                        :channel/_msgs {:db/id (:db/id channel)}}]
+                                                                      {:tx/persist? true}))
+                                                    (set! (.-value (.-target event)) "")))})
                                 (dom/button
                                  {:class "post"}
                                  "Post"))
