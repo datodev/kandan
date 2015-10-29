@@ -366,7 +366,9 @@
         (dom/li
          (dom/a
           {:href "/users/sign_out"
-           :on-click (fn [event] (kill! event))}
+           :on-click (fn [event]
+                       (kill! event)
+                       (dato/rpc-call dato :kandan.user/logout))}
           "Logout"))
         (dom/li
          (dom/a
