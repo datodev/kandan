@@ -10,6 +10,7 @@
             [dato.lib.server :as dato]
             [kandan.datomic.core :as db-conn]
             [kandan.config :as config]
+            [kandan.session-store :as session-txn-store]
             [hiccup.core :as h]
             [immutant.codecs :as cdc]
             [ring.adapter.jetty :as jetty]
@@ -80,8 +81,11 @@
 (defn handler [{c :context}]
   (resp/redirect (str c "/index.html")))
 
+(defn store-session-txn! [dato-state session-id txn-info]
+  (session-txn-store/store-session-transition! session-id txn-info))
+
 (def routing-table
-  {})
+  {[:ss/store-session-txn!] {:handler store-session-txn!}})
 
 (def dato-routes
   (dato/new-routing-table routing-table))
