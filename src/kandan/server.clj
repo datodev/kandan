@@ -2,6 +2,7 @@
   (:require [bidi.bidi :as bidi]
             [cheshire.core :as json]
             [clojure.java.io :as io]
+            [clojure.tools.logging :as log]
             [compojure.core :refer [defroutes GET POST]]
             [compojure.route :as route]
             [datomic.api :as d]
@@ -84,8 +85,22 @@
 (defn store-session-txn! [dato-state session-id txn-info]
   (session-txn-store/store-session-transition! session-id txn-info))
 
+(defn login [dato-state session-id incoming]
+  (log/infof "LOGIN! %s" incoming))
+
+(defn logout [dato-state session-id incoming]
+  (log/info "LOGOUT! %s" incoming))
+
+(defn create-user [dato-state session-id incoming]
+  (log/infof "CREATE USER! %s" incoming))
+
 (def routing-table
-  {[:ss/store-session-txn!] {:handler store-session-txn!}})
+  {[:kandan.user/login]     {:handler #'login}
+   [:kandan.user/logout]    {:handler #'logout}
+   [:kandan.user/create]    {:handler #'create-user}
+   [:kandan.user/hello]     {:handler #'create-user}
+   [:kandan.user/new-route] {:handler #'create-user}
+   [:ss/store-session-txn!] {:handler store-session-txn!}})
 
 (def dato-routes
   (dato/new-routing-table routing-table))
