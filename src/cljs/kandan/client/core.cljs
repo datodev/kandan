@@ -56,10 +56,8 @@
                               :shared     {:dato dato}
                               :instrument (:om-instrument opts)})]
        (when-not (dato/bootstrapped? @conn)
-         #_(js/window.addEventListener "mousemove" (partial handle-mouse-move cast!) false)
          (js/window.addEventListener "dragover" #(.preventDefault (or % js/event)) false)
          (js/window.addEventListener "drop" #(.preventDefault (or % js/event)) false)
-
          ;; Grab the DataScript Schema (and enums), and the session ID to
          ;; start.
          (dato/bootstrap! dato)
