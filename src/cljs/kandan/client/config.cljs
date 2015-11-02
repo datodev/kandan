@@ -1,10 +1,14 @@
-(ns kandan.client.config)
+(ns kandan.client.config
+  (:require-macros [macros :refer [get-git-version]]))
 
 (defn config []
   (aget js/window "Dato" "config"))
 
 (defn dato-port []
   (aget (config) "dato-port"))
+
+(def git-sha
+  (get-git-version))
 
 (def navigator-desc
   (let [navigator (.-navigator js/window)]
@@ -23,4 +27,4 @@
      :userAgent           (aget navigator "userAgent")
      :vendor              (aget navigator "vendor")
      :vendorSub           (aget navigator "vendorSub")
-     :client-git-sha      "8b986b8"}))
+     :client-git-sha      git-sha}))
