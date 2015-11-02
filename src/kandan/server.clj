@@ -11,7 +11,6 @@
             [dato.lib.server :as dato]
             [kandan.datomic.core :as db-conn]
             [kandan.config :as config]
-            [kandan.session-store :as session-txn-store]
             [hiccup.core :as h]
             [immutant.codecs :as cdc]
             [ring.adapter.jetty :as jetty]
@@ -82,9 +81,6 @@
 (defn handler [{c :context}]
   (resp/redirect (str c "/index.html")))
 
-(defn store-session-txn! [dato-state session-id txn-info]
-  (session-txn-store/store-session-transition! session-id txn-info))
-
 (defn login [dato-state session-id incoming]
   (log/infof "LOGIN! %s" incoming))
 
@@ -99,8 +95,7 @@
    [:kandan.user/logout]    {:handler #'logout}
    [:kandan.user/create]    {:handler #'create-user}
    [:kandan.user/hello]     {:handler #'create-user}
-   [:kandan.user/new-route] {:handler #'create-user}
-   [:ss/store-session-txn!] {:handler store-session-txn!}})
+   [:kandan.user/new-route] {:handler #'create-user}})
 
 (def dato-routes
   (dato/new-routing-table routing-table))
