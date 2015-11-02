@@ -66,10 +66,7 @@
            (let [[bootstrap-success? session-id] (<! dato-ch)
                  {:keys [r-pull]}              @(:ss dato)]
              (let [router (routes/make-router dato)]
-               #_(r-qes-by {:name :find-channels
-                            :a    :dato/type
-                            :v    :kandan.type/org})
-               
+               (dato/rpc-call dato :session/annotate! config/navigator-desc)
                (r-pull {:name   :initial-pull
                         :pull   '[*
                                   {:org/_users
