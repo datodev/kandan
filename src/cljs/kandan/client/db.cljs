@@ -25,3 +25,9 @@
 (defn inspected-channel [db session]
   (let [inspected-channel (:session/inspected session)]
     (d/entity db inspected-channel)))
+
+(defn session-meta [db]
+  (dsu/qe-by db :kandan/meta true))
+
+(defn finished-initial-loading? [db]
+  (not (:kandan.meta/initial-loading? (session-meta db))))
