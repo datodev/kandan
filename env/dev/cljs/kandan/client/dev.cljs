@@ -11,9 +11,6 @@
             [weasel.repl :as weasel]))
 
 (defn dev-connect! []
-  #_(figwheel/watch-and-reload
-   :websocket-url "ws://localhost:3449/figwheel-ws"
-   :jsload-callback (fn [] (js/console.log "Reloading from figwheel..")))
   (when (:weasel? utils/initial-query-map)
     (weasel/connect "ws://localhost:9001" :verbose true :print #{:repl :console}))
   true)
