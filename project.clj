@@ -47,7 +47,7 @@
                  [org.bouncycastle/bcmail-jdk15on "1.52"]
                  [org.bouncycastle/bcprov-jdk15on "1.52"]
                  [org.clojure/clojure "1.7.0"]
-                 [org.clojure/clojurescript "1.7.122" :exclusions [org.clojure/clojure org.clojure/tools.reader org.clojure/clojurescript
+                 [org.clojure/clojurescript "1.7.145" :exclusions [org.clojure/clojure org.clojure/tools.reader org.clojure/clojurescript
                                                                    org.clojure/google-closure-library-third-party]]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [org.clojure/data.json "0.2.6" :classifier "aot"]
